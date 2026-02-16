@@ -9,25 +9,54 @@ interface DeepgramResult {
 
 interface UseDeepgramLiveReturn {
   isConnected: boolean;
+  isReconnecting: boolean;
   connect: (keywords?: string[]) => Promise<void>;
   disconnect: () => void;
   sendAudio: (data: Blob) => void;
   onTranscript: (handler: (result: DeepgramResult) => void) => void;
+  onError: (handler: (error: string) => void) => void;
 }
+
+const MAX_RECONNECT_ATTEMPTS = 3;
 
 export function useDeepgramLive(): UseDeepgramLiveReturn {
   const [isConnected, setIsConnected] = useState(false);
+  const [isReconnecting, setIsReconnecting] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const handlerRef = useRef<((result: DeepgramResult) => void) | null>(null);
+  const errorHandlerRef = useRef<((error: string) => void) | null>(null);
   const keepAliveRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const tokenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const keywordsRef = useRef<string[]>([]);
+  const reconnectAttemptsRef = useRef(0);
+  const disconnectedManuallyRef = useRef(false);
 
   const getToken = async (): Promise<string> => {
     const res = await fetch('/api/deepgram-token', { method: 'POST' });
+    if (res.status === 429) {
+      throw new Error('RATE_LIMIT');
+    }
     if (!res.ok) throw new Error('Failed to get Deepgram token');
     const data = await res.json();
     return data.token;
+  };
+
+  const getTokenWithBackoff = async (): Promise<string> => {
+    let attempts = 0;
+    while (attempts < 3) {
+      try {
+        return await getToken();
+      } catch (err) {
+        if (err instanceof Error && err.message === 'RATE_LIMIT') {
+          attempts++;
+          const delay = Math.pow(2, attempts) * 1000;
+          await new Promise((r) => setTimeout(r, delay));
+        } else {
+          throw err;
+        }
+      }
+    }
+    throw new Error('Token request failed after retries');
   };
 
   const connectWs = useCallback(async (token: string) => {
@@ -44,6 +73,8 @@ export function useDeepgramLive(): UseDeepgramLiveReturn {
 
       ws.onopen = () => {
         setIsConnected(true);
+        setIsReconnecting(false);
+        reconnectAttemptsRef.current = 0;
         resolve(ws);
       };
 
@@ -63,13 +94,46 @@ export function useDeepgramLive(): UseDeepgramLiveReturn {
       };
 
       ws.onerror = () => reject(new Error('WebSocket connection failed'));
-      ws.onclose = () => setIsConnected(false);
+
+      ws.onclose = () => {
+        setIsConnected(false);
+        // Auto-reconnect on unexpected close
+        if (!disconnectedManuallyRef.current && reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
+          attemptReconnect();
+        } else if (reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) {
+          errorHandlerRef.current?.('接続を復旧できませんでした。ページを再読み込みしてください。');
+        }
+      };
     });
   }, []);
 
+  const attemptReconnect = useCallback(async () => {
+    reconnectAttemptsRef.current++;
+    setIsReconnecting(true);
+
+    const delay = Math.pow(2, reconnectAttemptsRef.current) * 1000;
+    await new Promise((r) => setTimeout(r, delay));
+
+    try {
+      const token = await getTokenWithBackoff();
+      const ws = await connectWs(token);
+      wsRef.current = ws;
+    } catch {
+      if (reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
+        attemptReconnect();
+      } else {
+        setIsReconnecting(false);
+        errorHandlerRef.current?.('接続を復旧できませんでした。ページを再読み込みしてください。');
+      }
+    }
+  }, [connectWs]);
+
   const connect = useCallback(async (keywords?: string[]) => {
     keywordsRef.current = keywords ?? [];
-    const token = await getToken();
+    disconnectedManuallyRef.current = false;
+    reconnectAttemptsRef.current = 0;
+
+    const token = await getTokenWithBackoff();
     const ws = await connectWs(token);
     wsRef.current = ws;
 
@@ -83,20 +147,21 @@ export function useDeepgramLive(): UseDeepgramLiveReturn {
     // Token refresh at 9 minutes (90% of TTL)
     tokenTimerRef.current = setTimeout(async () => {
       try {
-        const newToken = await getToken();
-        // Close old connection
+        const newToken = await getTokenWithBackoff();
         ws.send(JSON.stringify({ type: 'CloseStream' }));
+        disconnectedManuallyRef.current = true;
         ws.close();
-        // Reconnect with new token
+        disconnectedManuallyRef.current = false;
         const newWs = await connectWs(newToken);
         wsRef.current = newWs;
       } catch {
-        // Token refresh failed, connection will eventually timeout
+        errorHandlerRef.current?.('トークンの更新に失敗しました');
       }
     }, 9 * 60 * 1000);
   }, [connectWs]);
 
   const disconnect = useCallback(() => {
+    disconnectedManuallyRef.current = true;
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'CloseStream' }));
       wsRef.current.close();
@@ -105,6 +170,7 @@ export function useDeepgramLive(): UseDeepgramLiveReturn {
     if (keepAliveRef.current) clearInterval(keepAliveRef.current);
     if (tokenTimerRef.current) clearTimeout(tokenTimerRef.current);
     setIsConnected(false);
+    setIsReconnecting(false);
   }, []);
 
   const sendAudio = useCallback((data: Blob) => {
@@ -117,5 +183,9 @@ export function useDeepgramLive(): UseDeepgramLiveReturn {
     handlerRef.current = handler;
   }, []);
 
-  return { isConnected, connect, disconnect, sendAudio, onTranscript };
+  const onError = useCallback((handler: (error: string) => void) => {
+    errorHandlerRef.current = handler;
+  }, []);
+
+  return { isConnected, isReconnecting, connect, disconnect, sendAudio, onTranscript, onError };
 }

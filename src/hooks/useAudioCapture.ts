@@ -2,10 +2,13 @@
 
 import { useCallback, useRef, useState } from 'react';
 
+export type AudioCaptureError = 'permission_denied' | 'not_supported' | 'unknown';
+
 interface UseAudioCaptureReturn {
   isCapturing: boolean;
   volume: number;
   silenceWarning: boolean;
+  error: AudioCaptureError | null;
   startCapture: (onData: (data: Blob) => void) => Promise<void>;
   stopCapture: () => void;
 }
@@ -14,6 +17,7 @@ export function useAudioCapture(): UseAudioCaptureReturn {
   const [isCapturing, setIsCapturing] = useState(false);
   const [volume, setVolume] = useState(0);
   const [silenceWarning, setSilenceWarning] = useState(false);
+  const [error, setError] = useState<AudioCaptureError | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -23,7 +27,26 @@ export function useAudioCapture(): UseAudioCaptureReturn {
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
 
   const startCapture = useCallback(async (onData: (data: Blob) => void) => {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    setError(null);
+
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (err) {
+      if (err instanceof DOMException) {
+        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+          setError('permission_denied');
+        } else if (err.name === 'NotFoundError' || err.name === 'NotSupportedError') {
+          setError('not_supported');
+        } else {
+          setError('unknown');
+        }
+      } else {
+        setError('unknown');
+      }
+      throw err;
+    }
+
     streamRef.current = stream;
 
     // Audio analysis for volume meter
@@ -97,7 +120,8 @@ export function useAudioCapture(): UseAudioCaptureReturn {
     setIsCapturing(false);
     setVolume(0);
     setSilenceWarning(false);
+    setError(null);
   }, []);
 
-  return { isCapturing, volume, silenceWarning, startCapture, stopCapture };
+  return { isCapturing, volume, silenceWarning, error, startCapture, stopCapture };
 }

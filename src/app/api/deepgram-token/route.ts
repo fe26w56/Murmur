@@ -21,6 +21,14 @@ export async function POST() {
       }),
     });
 
+    if (res.status === 429) {
+      const retryAfter = res.headers.get('Retry-After') ?? '5';
+      return NextResponse.json(
+        { error: 'Rate limited', retryAfter: Number(retryAfter) },
+        { status: 429 },
+      );
+    }
+
     if (!res.ok) {
       const text = await res.text();
       return NextResponse.json(
