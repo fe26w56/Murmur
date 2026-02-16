@@ -20,17 +20,57 @@ const tierConfig: Record<TranslationTier, { provider: 'gemini' | 'anthropic'; mo
   premium: { provider: 'anthropic', model: 'claude-sonnet-4-5-20250929' },
 };
 
+// Fallback order: premium → standard → lite → raw
+const fallbackOrder: TranslationTier[] = ['premium', 'standard', 'lite'];
+
+function getFallbackTier(currentTier: TranslationTier): TranslationTier | null {
+  const idx = fallbackOrder.indexOf(currentTier);
+  if (idx < 0 || idx >= fallbackOrder.length - 1) return null;
+  return fallbackOrder[idx + 1];
+}
+
 export async function* translateStream(
   params: TranslateParams,
 ): AsyncGenerator<string, void, unknown> {
-  const config = tierConfig[params.tier];
-  const prompt = buildTranslationPrompt(params);
-  const systemPrompt = buildSystemPrompt();
+  let currentTier = params.tier;
 
-  if (config.provider === 'gemini') {
-    yield* streamGemini(config.model, systemPrompt, prompt);
-  } else {
-    yield* streamAnthropic(config.model, systemPrompt, prompt);
+  while (true) {
+    const config = tierConfig[currentTier];
+    const prompt = buildTranslationPrompt({
+      utterance: params.utterance,
+      context: params.context,
+      history: params.history,
+    });
+    const systemPrompt = buildSystemPrompt();
+
+    let hasYielded = false;
+
+    try {
+      const stream =
+        config.provider === 'gemini'
+          ? streamGemini(config.model, systemPrompt, prompt)
+          : streamAnthropic(config.model, systemPrompt, prompt);
+
+      for await (const chunk of stream) {
+        hasYielded = true;
+        yield chunk;
+      }
+      return; // Success, exit
+    } catch {
+      // Only fallback if no chunks were already sent to the client
+      if (hasYielded) {
+        return; // Partial output already sent, can't cleanly fallback
+      }
+
+      const fallback = getFallbackTier(currentTier);
+      if (fallback) {
+        currentTier = fallback;
+        continue; // Retry with fallback tier
+      }
+      // No more fallbacks, yield raw original text
+      yield params.utterance;
+      return;
+    }
   }
 }
 

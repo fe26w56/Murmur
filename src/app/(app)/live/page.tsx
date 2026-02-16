@@ -9,8 +9,10 @@ import { useTranslation } from '@/hooks/useTranslation';
 import { SubtitleDisplay } from '@/components/live/SubtitleDisplay';
 import { LiveControls } from '@/components/live/LiveControls';
 import { ContextSelector } from '@/components/live/ContextSelector';
+import { NetworkStatus } from '@/components/live/NetworkStatus';
 import { useLiveStore } from '@/stores/liveStore';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { showToast } from '@/components/ui/Toast';
 
 interface ContextData {
   id: string;
@@ -69,6 +71,13 @@ export default function LivePage() {
       }
     });
   }, [deepgram, buffer]);
+
+  // Wire deepgram error handler
+  useEffect(() => {
+    deepgram.onError((errorMsg) => {
+      showToast(errorMsg, 'error');
+    });
+  }, [deepgram]);
 
   // Wire utterance buffer to translation
   useEffect(() => {
@@ -130,7 +139,18 @@ export default function LivePage() {
         }
       }, 5 * 60 * 1000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '開始に失敗しました');
+      // Handle mic permission errors from the thrown DOMException
+      if (err instanceof DOMException) {
+        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+          setError('マイクの使用が許可されていません。ブラウザの設定でマイクのアクセスを許可してください。');
+        } else if (err.name === 'NotFoundError' || err.name === 'NotSupportedError') {
+          setError('お使いのデバイスではマイクが利用できません。');
+        } else {
+          setError(err instanceof Error ? err.message : '開始に失敗しました');
+        }
+      } else {
+        setError(err instanceof Error ? err.message : '開始に失敗しました');
+      }
     }
   }, [selectedContext, currentTier, deepgram, audio, setRecording, setSessionId, setElapsedSeconds]);
 
@@ -167,6 +187,8 @@ export default function LivePage() {
 
   return (
     <div className="flex min-h-screen flex-col">
+      <NetworkStatus />
+
       {/* Header */}
       <header className="flex h-14 items-center justify-between border-b border-border px-4">
         <button onClick={handleCloseRequest} className="text-sm text-muted-foreground">
@@ -195,6 +217,13 @@ export default function LivePage() {
           </div>
         )}
 
+        {/* Reconnecting indicator */}
+        {deepgram.isReconnecting && isRecording && (
+          <div className="mx-4 mb-2 rounded-lg bg-yellow-500/20 p-3 text-center text-sm text-yellow-700 dark:text-yellow-400">
+            再接続中...
+          </div>
+        )}
+
         {/* Subtitle display area */}
         {isRecording && (
           <SubtitleDisplay
@@ -205,7 +234,7 @@ export default function LivePage() {
 
         {/* Silence warning */}
         {audio.silenceWarning && isRecording && (
-          <div className="mx-4 mb-2 rounded-lg bg-warning/20 p-3 text-center text-sm text-warning">
+          <div className="mx-4 mb-2 rounded-lg bg-yellow-500/20 p-3 text-center text-sm text-yellow-700 dark:text-yellow-400">
             音声が検出されません。マイクを確認してください
           </div>
         )}

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Bricolage_Grotesque, DM_Sans } from 'next/font/google';
+import { ToastContainer } from '@/components/ui/Toast';
 import './globals.css';
 
 const bricolage = Bricolage_Grotesque({
@@ -37,6 +38,7 @@ export default function RootLayout({
   return (
     <html lang="ja" suppressHydrationWarning>
       <body className={`${bricolage.variable} ${dmSans.variable} font-sans antialiased`}>
+        <ToastContainer />
         {children}
       </body>
     </html>
