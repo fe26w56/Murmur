@@ -36,7 +36,7 @@ export function useAudioCapture(): UseAudioCaptureReturn {
         audio: {
           echoCancellation: false,
           noiseSuppression: false,
-          autoGainControl: false,
+          autoGainControl: true, // Boost quiet ambient audio
         },
       });
     } catch (err) {
@@ -56,14 +56,25 @@ export function useAudioCapture(): UseAudioCaptureReturn {
 
     streamRef.current = stream;
 
-    // Audio analysis for volume meter
+    // Audio processing pipeline:
+    // source → analyser (volume meter, raw audio)
+    // source → gain(3x) → destination → MediaRecorder (amplified for Deepgram)
     const audioCtx = new AudioContext();
     audioCtxRef.current = audioCtx;
     const source = audioCtx.createMediaStreamSource(stream);
+
+    // Volume meter on raw audio
     const analyser = audioCtx.createAnalyser();
     analyser.fftSize = 256;
     source.connect(analyser);
     analyserRef.current = analyser;
+
+    // Amplify audio 3x for better ambient speech recognition
+    const gainNode = audioCtx.createGain();
+    gainNode.gain.value = 3.0;
+    const destination = audioCtx.createMediaStreamDestination();
+    source.connect(gainNode);
+    gainNode.connect(destination);
 
     // Volume monitoring
     const dataArray = new Uint8Array(analyser.frequencyBinCount);
@@ -89,12 +100,12 @@ export function useAudioCapture(): UseAudioCaptureReturn {
     };
     updateVolume();
 
-    // MediaRecorder uses raw stream (Deepgram handles noise natively)
+    // MediaRecorder uses amplified stream
     const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
       ? 'audio/webm;codecs=opus'
       : 'audio/mp4';
 
-    const recorder = new MediaRecorder(stream, { mimeType });
+    const recorder = new MediaRecorder(destination.stream, { mimeType });
     recorder.ondataavailable = (e) => {
       if (e.data.size > 0) onData(e.data);
     };
