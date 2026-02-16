@@ -10,7 +10,7 @@
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│                    クライアント（ブラウザ / PWA）                          │
+│                    クライアント（ブラウザ / PWA※Phase 3）                    │
 │                                                                      │
 │  ┌──────────┐  ┌──────────────┐  ┌──────────────┐  ┌───────────┐   │
 │  │ マイク入力  │  │ UtteranceBuffer│ │ SlidingWindow │  │ セッション  │   │
@@ -79,7 +79,7 @@
 | 言語 | TypeScript | 5.x |
 | UI | Tailwind CSS + shadcn/ui | 4.x / latest |
 | 状態管理 | Zustand | 5.x |
-| PWA | next-pwa | latest |
+| PWA | next-pwa | latest | **※ Phase 3 で導入（MVP対象外）** |
 | 音声キャプチャ | Web Audio API + MediaStream | ブラウザネイティブ |
 
 #### バックエンド
@@ -380,21 +380,21 @@ CREATE INDEX idx_templates_type ON public.context_templates(type);
 | POST | `/api/deepgram-token` | Deepgram一時トークン発行（TTL 600秒） | Bearer Token |
 | POST | `/api/translate` | utterance翻訳（SSEストリーミング応答） | Bearer Token |
 | GET | `/api/templates` | プリセットテンプレート一覧取得 | Bearer Token |
-| GET | `/api/templates/:id` | テンプレート詳細取得 | Bearer Token |
-| POST | `/api/templates/:id/use` | テンプレートからコンテキスト作成 | Bearer Token |
+| GET | `/api/templates/[id]` | テンプレート詳細取得 | Bearer Token |
+| POST | `/api/templates/[id]/use` | テンプレートからコンテキスト作成 | Bearer Token |
 | POST | `/api/contexts` | コンテキスト作成 | Bearer Token |
 | GET | `/api/contexts` | コンテキスト一覧取得 | Bearer Token |
-| GET | `/api/contexts/:id` | コンテキスト詳細取得 | Bearer Token |
-| PUT | `/api/contexts/:id` | コンテキスト更新 | Bearer Token |
-| DELETE | `/api/contexts/:id` | コンテキスト削除 | Bearer Token |
-| POST | `/api/contexts/:id/research` | AI事前調査を開始（Supabase Edge Function呼出）**（Phase 2）** | Bearer Token |
-| GET | `/api/contexts/:id/research/status` | 調査進捗確認 **（Phase 2）** | Bearer Token |
+| GET | `/api/contexts/[id]` | コンテキスト詳細取得 | Bearer Token |
+| PUT | `/api/contexts/[id]` | コンテキスト更新 | Bearer Token |
+| DELETE | `/api/contexts/[id]` | コンテキスト削除 | Bearer Token |
+| POST | `/api/contexts/[id]/research` | AI事前調査を開始（Supabase Edge Function呼出）**（Phase 2）** | Bearer Token |
+| GET | `/api/contexts/[id]/research/status` | 調査進捗確認 **（Phase 2）** | Bearer Token |
 | POST | `/api/sessions` | セッション作成 | Bearer Token |
 | GET | `/api/sessions` | セッション一覧取得 | Bearer Token |
-| GET | `/api/sessions/:id` | セッション詳細（トランスクリプト含む）取得 | Bearer Token |
-| PATCH | `/api/sessions/:id` | セッション更新（終了時刻の記録等） | Bearer Token |
-| DELETE | `/api/sessions/:id` | セッション削除 | Bearer Token |
-| GET | `/api/sessions/:id/export` | セッションエクスポート（テキスト/PDF）**（Phase 3）** | Bearer Token |
+| GET | `/api/sessions/[id]` | セッション詳細（トランスクリプト含む）取得 | Bearer Token |
+| PATCH | `/api/sessions/[id]` | セッション更新（終了時刻の記録等） | Bearer Token |
+| DELETE | `/api/sessions/[id]` | セッション削除 | Bearer Token |
+| GET | `/api/sessions/[id]/export` | セッションエクスポート（テキスト/PDF）**（Phase 3）** | Bearer Token |
 
 ### 3.2 ライブ翻訳フロー（クライアント直接接続方式）
 
@@ -527,7 +527,7 @@ interface CreateSessionResponse {
 }
 ```
 
-#### PATCH `/api/sessions/:id` — セッション更新（終了等）
+#### PATCH `/api/sessions/[id]` — セッション更新（終了等）
 
 ```typescript
 // リクエスト
@@ -551,7 +551,7 @@ interface UpdateSessionRequest {
 ```
 
 - **active**: 録音中。`POST /api/sessions` でセッション作成と同時に `started_at` を設定。セッション中は5分毎に `ended_at` を現在時刻に更新（ハートビート兼用。ブラウザが異常終了した場合でも最終確認時刻が残る）
-- **completed**: 録音完了。`PATCH /api/sessions/:id` で `ended_at` を最終確定。以降の更新は行わない
+- **completed**: 録音完了。`PATCH /api/sessions/[id]` で `ended_at` を最終確定。以降の更新は行わない
 - 状態はDBカラム（`started_at`, `ended_at`）から導出。専用statusカラムは不要
 - 判定ロジック: `started_at IS NOT NULL AND (ended_at IS NULL OR ended_at > now() - INTERVAL '10 minutes')` → active
 
@@ -559,9 +559,9 @@ interface UpdateSessionRequest {
 
 > **注意**: コンテキスト調査はTavily + Firecrawl + LLM要約を含むため10秒超の処理時間が必要。
 > Vercel Hobbyの10秒タイムアウト制限に抵触するため、**実際の調査処理はSupabase Edge Functionsに委譲**する。
-> Next.js API (`/api/contexts/:id/research`) は調査の開始トリガーと進捗ポーリング用の薄いラッパーとして機能する。
+> Next.js API (`/api/contexts/[id]/research`) は調査の開始トリガーと進捗ポーリング用の薄いラッパーとして機能する。
 
-#### POST `/api/contexts/:id/research` — 調査開始
+#### POST `/api/contexts/[id]/research` — 調査開始
 
 ```typescript
 // Next.js API Route（Vercel上、10秒以内で完了）
@@ -576,7 +576,7 @@ interface ResearchStartResponse {
 }
 ```
 
-#### GET `/api/contexts/:id/research/status` — 進捗確認
+#### GET `/api/contexts/[id]/research/status` — 進捗確認
 
 ```typescript
 // クライアントがポーリングで進捗を確認（5秒間隔推奨）
@@ -705,7 +705,8 @@ src/
 │   │   ├── login/
 │   │   │   └── page.tsx            # ログイン
 │   │   └── callback/
-│   │       └── route.ts            # OAuth コールバック
+│   │       ├── route.ts            # OAuth コールバック（サーバーサイドのコード交換・Cookie確立・リダイレクト）
+│   │       └── page.tsx            # OAuth コールバック（ローディング/エラー表示）
 │   └── api/
 │       ├── deepgram-token/
 │       │   └── route.ts            # Deepgram一時トークン発行
@@ -715,10 +716,10 @@ src/
 │       │   ├── route.ts            # 一覧・作成
 │       │   └── [id]/
 │       │       ├── route.ts        # 詳細・更新・削除
-│       │       └── research/
-│       │           ├── route.ts    # AI事前調査開始（Edge Func呼出）
+│       │       └── research/                  # （Phase 2）
+│       │           ├── route.ts    # AI事前調査開始（Edge Func呼出）（Phase 2）
 │       │           └── status/
-│       │               └── route.ts # 調査進捗確認
+│       │               └── route.ts # 調査進捗確認（Phase 2）
 │       ├── templates/
 │       │   ├── route.ts            # テンプレート一覧
 │       │   └── [id]/
@@ -729,8 +730,8 @@ src/
 │           ├── route.ts            # 一覧
 │           └── [id]/
 │               ├── route.ts        # 詳細・削除
-│               └── export/
-│                   └── route.ts    # エクスポート
+│               └── export/                    # （Phase 3）
+│                   └── route.ts    # エクスポート（Phase 3）
 ├── components/
 │   ├── ui/                         # shadcn/ui コンポーネント
 │   ├── live/
@@ -1164,6 +1165,21 @@ class UtteranceBuffer {
     │◄─ Response ──────────────────│
 ```
 
+#### OAuth コールバックとCookieの関係
+
+本アプリは `middleware.ts` でリクエストごとにサーバーサイドでセッションCookieを検証する。そのため、OAuthコールバック時のコード交換（`exchangeCodeForSession`）は **`app/auth/callback/route.ts`（サーバーサイド）** で実行し、レスポンスの `Set-Cookie` ヘッダーでセッションCookieを確立する。`page.tsx` はローディング/エラー表示の補助的役割のみ。
+
+```
+[ブラウザ]              [route.ts]              [Supabase Auth]
+    │                        │                        │
+    │── GET /auth/callback ─►│                        │
+    │   ?code=xxx            │── exchangeCodeFor ────►│
+    │                        │   Session(code)        │
+    │                        │◄─ Session + JWT ───────│
+    │◄─ Set-Cookie + 302 ───│                        │
+    │   Location: /          │                        │
+```
+
 ### 6.2 APIキー管理
 
 | キー | 管理場所 | 露出範囲 |
@@ -1279,7 +1295,7 @@ $$ LANGUAGE sql SECURITY DEFINER;
 - セッション開始時に月間残量を確認（`get_monthly_usage` を呼出し）
 - 残量が10分未満の場合、警告を表示
 - 残量ゼロの場合、新規セッション作成をブロックし、プランアップグレードを案内
-- セッション中は定期的（5分毎）に利用時間を更新（`PATCH /api/sessions/:id` で `ended_at` を更新）
+- セッション中は定期的（5分毎）に利用時間を更新（`PATCH /api/sessions/[id]` で `ended_at` を更新）
 
 > **MVP段階**: Free プラン（1時間/月）のみ。課金機能はPhase 2で実装。
 

@@ -36,20 +36,23 @@
 
 ### 1.3 MVPスコープ外（Phase 2以降）
 
-以下は明示的にMVPから除外する:
+以下は明示的にMVPから除外する。**タスク表にこれらの項目は含まれない。** 設計書のディレクトリ構成・API一覧には記載があるが、いずれも `（Phase 2）` / `（Phase 3）` 注記付き。
 
-- AI自動調査（Tavily + Firecrawl）→ Phase 2
+**Phase 2:**
+- AI自動調査（Tavily + Firecrawl）
   - コンテキスト調査APIルート（`app/api/contexts/[id]/research/route.ts`）
   - 調査進捗UI（`ResearchProgress.tsx`）
   - 調査エージェント（`lib/research-agent.ts`）
-- コンテキストのプレビュー・編集UI → Phase 2
-- Gemini Context Caching → Phase 2
-- 音声認識の誤り補正（コンテキストベース）→ Phase 2
-- PWA対応 → Phase 3
-- ダークモード手動切替 → Phase 3
-- セッションエクスポート → Phase 3
-- セッション履歴のテキスト検索 → Phase 2
-- 課金機能 → Phase 2
+- コンテキストのプレビュー・編集UI
+- Gemini Context Caching
+- 音声認識の誤り補正（コンテキストベース）
+- セッション履歴のテキスト検索
+- 課金機能
+
+**Phase 3:**
+- PWA対応
+- ダークモード手動切替
+- セッションエクスポート（`app/api/sessions/[id]/export/route.ts`）
 
 ---
 
@@ -124,7 +127,7 @@ Sprint 5  ████ エラーハンドリング + テスト + デプロイ
 | 0-4 | Supabaseプロジェクト作成 + CLI初期化 | `supabase/` ディレクトリ |
 | 0-5 | Supabase マイグレーション作成（全テーブル + RLS + トリガー）。`context_status` ENUMは Phase 2（researching/error）に備え定義するが、MVPでは `ready` のみ使用 | `supabase/migrations/` |
 | 0-6 | テンプレートシードデータ投入スクリプト（`data/disney-templates.json` から INSERT生成） | `supabase/seed.sql` |
-| 0-7 | Supabase クライアント（ブラウザ/サーバー）初期化 | `lib/supabase/client.ts`, `server.ts` |
+| 0-7 | Supabase クライアント（ブラウザ/サーバー）初期化 | `lib/supabase/client.ts`, `lib/supabase/server.ts` |
 | 0-8 | 型定義（Supabase CLI型自動生成 + アプリ固有型） | `types/database.ts`, `types/*.ts` |
 | 0-9 | Vercelプロジェクト作成 + GitHub連携 | Vercel Dashboard |
 | 0-10 | 環境変数設定（Vercel + ローカル `.env.local`） | `.env.local`, Vercel env |
@@ -161,7 +164,8 @@ Sprint 5  ████ エラーハンドリング + テスト + デプロイ
 |---|--------|--------|----------|
 | 1-1 | Supabase Auth 設定（Google OAuth プロバイダー + メール認証） | Supabase Dashboard設定 | F1 |
 | 1-2 | ログインページ（Google + メールフォーム + 新規登録モード切替 + メール確認待ち状態）。デザインは `screen.pen` S1を参照 | `app/auth/login/page.tsx` | F1 |
-| 1-3 | OAuth コールバックルート + ローディング/エラー表示。デザインは `screen.pen` S1aを参照 | `app/auth/callback/route.ts` | F1 |
+| 1-3a | OAuth コールバック: サーバーサイドのコード交換・Cookie確立・リダイレクト | `app/auth/callback/route.ts` | F1 |
+| 1-3b | OAuth コールバック: ローディング/エラー表示。デザインは `screen.pen` S1aを参照 | `app/auth/callback/page.tsx` | F1 |
 | 1-4 | AuthGuard コンポーネント（未認証→リダイレクト） | `components/layout/AuthGuard.tsx` | F1 |
 | 1-5 | Next.js Middleware（認証チェック） | `middleware.ts` | F1 |
 | 1-6 | ルートレイアウト（SupabaseProvider, ヘッダー, BottomNav）。デザインは `screen.pen` S2のHeader/BottomNavを参照 | `app/layout.tsx` | — |
@@ -320,7 +324,7 @@ POST /api/translate
 | # | タスク | 成果物 | 関連機能 |
 |---|--------|--------|----------|
 | 4-1 | セッション作成API（POST /api/sessions）。`title` 未指定時はコンテキスト名 + 日時から自動生成 | `app/api/sessions/route.ts` | F9 |
-| 4-2 | セッション更新API（PATCH /api/sessions/:id） | `app/api/sessions/[id]/route.ts` | F9 |
+| 4-2 | セッション更新API（PATCH /api/sessions/[id]） | `app/api/sessions/[id]/route.ts` | F9 |
 | 4-3 | セッション一覧API + 詳細API（GET、一覧は offset-based pagination: `limit=20&offset=0`） | 同上 | F9 |
 | 4-4 | セッション削除API（DELETE） | 同上 | F9 |
 | 4-5 | ライブ翻訳フローにセッション統合（作成→録音→終了） | `hooks/useLiveSession.ts` 更新 | F9 |
@@ -343,9 +347,9 @@ POST /api/translate
 6. [リアルタイム翻訳ループ]
    - Deepgram → UtteranceBuffer → POST /translate → 字幕表示
    - 翻訳完了時に transcripts テーブルにINSERT（SSE close前に完了）
-   - 5分毎に PATCH /api/sessions/:id で ended_at 更新
+   - 5分毎に PATCH /api/sessions/[id] で ended_at 更新
 7. ユーザーが「停止」をタップ
-8. WebSocket切断 → PATCH /api/sessions/:id（ended_at 最終確定）
+8. WebSocket切断 → PATCH /api/sessions/[id]（ended_at 最終確定）
 ```
 
 #### 完了条件
@@ -417,7 +421,7 @@ POST /api/translate
     "react": "^19",
     "react-dom": "^19",
     "@supabase/supabase-js": "^2",
-    "@supabase/ssr": "^0",
+    "@supabase/ssr": "^0.6",
     "@google/genai": "^1",
     "@anthropic-ai/sdk": "^0",
     "zustand": "^5",
@@ -432,7 +436,7 @@ POST /api/translate
     "vitest": "^3",
     "@playwright/test": "^1",
     "msw": "^2",
-    "supabase": "^2",
+    "supabase": "^2",              // Supabase CLI（ローカルDB・マイグレーション・型生成に使用）
     "eslint": "^9",
     "prettier": "latest"
   }

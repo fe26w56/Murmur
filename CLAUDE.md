@@ -25,11 +25,11 @@
 
 | ドキュメント | 内容 |
 |-------------|------|
-| `docs/requirements.md` | 要件定義書（ユーザーストーリー、コア機能、MVPスコープ） |
-| `docs/design.md` | 設計書（アーキテクチャ、データモデル、API設計） |
-| `docs/implementation-plan.md` | 実装計画書（スプリント計画、タスク一覧、コードパターン） |
-| `docs/screen-design.md` | 画面設計書（全画面のレイアウト・コンポーネント構成） |
-| `docs/api-research.md` | API調査レポート（Deepgram, Gemini, Claude等の仕様） |
+| `docs/01-requirements.md` | 要件定義書（ユーザーストーリー、コア機能、MVPスコープ） |
+| `docs/02-api-research.md` | API調査レポート（Deepgram, Gemini, Claude等の仕様） |
+| `docs/03-system-design.md` | 設計書（アーキテクチャ、データモデル、API設計） |
+| `docs/04-screen-design.md` | 画面設計書（全画面のレイアウト・コンポーネント構成） |
+| `docs/05-implementation-plan.md` | 実装計画書（スプリント計画、タスク一覧、コードパターン） |
 | `screen.pen` | デザインカンプ（Pencilファイル。全画面S1〜S8のビジュアルデザイン） |
 | `data/disney-templates.json` | ディズニーアトラクション26件のプリセットテンプレートデータ |
 
@@ -43,21 +43,35 @@ main ← develop ← feature/sprint-X-task-description
 - **develop**: 開発統合ブランチ。全 feature PR のマージ先
 - **feature/sprint-X-***: 各タスク用の作業ブランチ。develop から切る
 
+## Git Worktree 構成（2トラック並列開発）
+
+```
+Murmur/            → main（本番 + ドキュメント管理）
+Murmur-track-a/    → Track A: Backend/API 作業用
+Murmur-track-b/    → Track B: Frontend/UI 作業用
+```
+
+### ルール
+
+- **feature ブランチは各 worktree 内で切る**。他の worktree のブランチを checkout しない
+- **develop へのマージ**は `gh pr merge` で行う（worktree 間の衝突を避ける）
+- マージ後は作業中の worktree で `git fetch origin && git rebase origin/develop` して最新化
+- **ファイル編集は必ず対応する worktree 内で行う**。Track A の作業を Track B ディレクトリで行わない
+
 ## 開発フロー
 
-### 1. ブランチ作成
+### 1. ブランチ作成（worktree 内で実行）
 ```bash
-git fetch origin main develop
-git checkout develop
-git pull origin develop
-git merge origin/main --no-edit
-git push origin develop
+# Track A の場合（Murmur-track-a/ 内で実行）
+git fetch origin develop
+git rebase origin/develop
 git checkout -b feature/sprint-X-task-description
 ```
 
 ### 2. 実装 → コミット → PR作成
 - Conventional Commits 形式でコミット（例: `feat: add deepgram token API`）
 - PR は **develop** ブランチに対して作成する
+- PR本文に `Closes #XX` を記載（Issue 自動クローズ）
 - PR本文に対応するスプリントとタスク番号を記載
 
 ### 3. Codex CLIでレビュー（自動）
@@ -70,9 +84,15 @@ git checkout -b feature/sprint-X-task-description
 
 ### 5. マージ → 次のタスクへ
 ```bash
+# PR をマージ
 gh pr merge PR番号 --merge
-git checkout develop
-git pull origin develop
+
+# worktree を develop ベースに戻す
+git checkout track-a/workspace   # または track-b/workspace
+git fetch origin develop
+git rebase origin/develop
+
+# 次の feature ブランチを切る
 git checkout -b feature/sprint-X-next-task
 ```
 
@@ -92,7 +112,14 @@ gh pr create --base main --head develop --title "release: Sprint X"
 | 4 | セッション管理 + 統合 | セッションCRUD, 履歴閲覧, 全画面連携 |
 | 5 | エラーハンドリング + テスト + デプロイ | E2Eテスト, 本番デプロイ |
 
-詳細は `docs/implementation-plan.md` を参照。
+詳細は `docs/05-implementation-plan.md` を参照。
+
+## Issue ワークフロー
+
+- GitHub Issues で全タスクを管理。各 Issue には `sprint:X` ラベルと `track:backend` / `track:frontend` ラベルを付与
+- 1つの Issue = 1つの feature ブランチ + 1つの PR
+- PR 本文には必ず `Closes #XX` を記載し、マージ時に Issue を自動クローズする
+- Issue 間の依存関係は Issue 本文の「依存関係」セクションに記載
 
 ## コーディング規約
 
