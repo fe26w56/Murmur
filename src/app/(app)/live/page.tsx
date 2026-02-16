@@ -186,7 +186,7 @@ export default function LivePage() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="no-overscroll flex min-h-screen flex-col">
       <NetworkStatus />
 
       {/* Header */}

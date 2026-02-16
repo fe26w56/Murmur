@@ -29,7 +29,7 @@ describe('estimateTokens (shared utility)', () => {
 });
 
 describe('Utterance buffering algorithm', () => {
-  let handler: ReturnType<typeof vi.fn>;
+  let handler: ReturnType<typeof vi.fn<(text: string) => void>>;
   let buffer: string[];
   let timer: ReturnType<typeof setTimeout> | null;
 

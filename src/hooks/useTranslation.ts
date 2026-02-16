@@ -44,6 +44,10 @@ export function useTranslation(): UseTranslationReturn {
     // Build history (sliding window of last 3)
     const history = historyRef.current.slice(-3);
 
+    // Performance: measure time from request to first token
+    const requestStart = performance.now();
+    let firstTokenLogged = false;
+
     // Start SSE request
     fetch('/api/translate', {
       method: 'POST',
@@ -81,6 +85,11 @@ export function useTranslation(): UseTranslationReturn {
           if (!line.startsWith('data: ')) continue;
           try {
             const data = JSON.parse(line.slice(6));
+            if (!firstTokenLogged && (data.text || data.done)) {
+              firstTokenLogged = true;
+              const ttft = Math.round(performance.now() - requestStart);
+              console.debug(`[Murmur] TTFT: ${ttft}ms (seq: ${sequenceNumber})`);
+            }
             if (data.done) {
               // Final message
               setTranslations((prev) =>

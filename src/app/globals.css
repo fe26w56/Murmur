@@ -128,5 +128,30 @@
   }
   body {
     @apply bg-background text-foreground;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+  }
+}
+
+/* iOS Safari safe area support */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .mb-safe {
+    margin-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
+
+/* Prevent iOS rubber-band scroll on live page */
+.no-overscroll {
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* iOS standalone mode status bar area */
+@media (display-mode: standalone) {
+  .pt-safe {
+    padding-top: env(safe-area-inset-top, 0px);
   }
 }
