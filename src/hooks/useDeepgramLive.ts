@@ -77,7 +77,7 @@ export function useDeepgramLive(): UseDeepgramLiveReturn {
         console.log('[Murmur] WebSocket OPEN');
         setIsConnected(true);
         setIsReconnecting(false);
-        reconnectAttemptsRef.current = 0;
+        // Don't reset reconnectAttemptsRef here — only reset on explicit connect()
         reconnectingRef.current = false;
         resolve(ws);
       };
@@ -179,10 +179,10 @@ export function useDeepgramLive(): UseDeepgramLiveReturn {
     const ws = await connectWs(token);
     wsRef.current = ws;
 
-    // KeepAlive every 5s
+    // KeepAlive every 5s (use wsRef.current so it works after reconnection)
     keepAliveRef.current = setInterval(() => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'KeepAlive' }));
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: 'KeepAlive' }));
       }
     }, 5000);
 
@@ -192,9 +192,12 @@ export function useDeepgramLive(): UseDeepgramLiveReturn {
         const newToken = await getTokenWithBackoff();
         // Mark as manual close so onclose doesn't trigger reconnect
         disconnectedManuallyRef.current = true;
-        ws.send(JSON.stringify({ type: 'CloseStream' }));
-        ws.close();
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({ type: 'CloseStream' }));
+          wsRef.current.close();
+        }
         // Connect new WS, then reset manual flag
+        reconnectAttemptsRef.current = 0;
         const newWs = await connectWs(newToken);
         wsRef.current = newWs;
         disconnectedManuallyRef.current = false;
