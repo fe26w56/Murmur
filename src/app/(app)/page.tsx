@@ -47,7 +47,7 @@ export default function HomePage() {
 
         if (usageRes.ok) {
           const usageJson = await usageRes.json();
-          setMonthlyMinutes(Math.round((usageJson.totalSeconds ?? 0) / 60));
+          setMonthlyMinutes(Math.floor((usageJson.totalSeconds ?? 0) / 60));
         }
       } catch {
         // Silently handle fetch errors

@@ -95,7 +95,7 @@ export default function SessionDetailPage() {
     minute: '2-digit',
   });
 
-  const duration = session.duration_seconds
+  const duration = session.duration_seconds !== null
     ? `${Math.round(session.duration_seconds / 60)}分`
     : '進行中';
 
