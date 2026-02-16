@@ -30,6 +30,7 @@ export function useDeepgramLive(): UseDeepgramLiveReturn {
   const keywordsRef = useRef<string[]>([]);
   const reconnectAttemptsRef = useRef(0);
   const disconnectedManuallyRef = useRef(false);
+  const reconnectingRef = useRef(false); // Prevents concurrent reconnect loops
 
   const getToken = async (): Promise<string> => {
     const res = await fetch('/api/deepgram-token', { method: 'POST' });
@@ -75,6 +76,7 @@ export function useDeepgramLive(): UseDeepgramLiveReturn {
         setIsConnected(true);
         setIsReconnecting(false);
         reconnectAttemptsRef.current = 0;
+        reconnectingRef.current = false;
         resolve(ws);
       };
 
@@ -97,26 +99,33 @@ export function useDeepgramLive(): UseDeepgramLiveReturn {
 
       ws.onclose = () => {
         setIsConnected(false);
-        // Auto-reconnect on unexpected close
-        if (!disconnectedManuallyRef.current && reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
+        // Only trigger reconnect from onclose if not already reconnecting
+        // and not manually disconnected
+        if (
+          !disconnectedManuallyRef.current &&
+          !reconnectingRef.current &&
+          reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS
+        ) {
           attemptReconnect();
-        } else if (reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) {
-          errorHandlerRef.current?.('接続を復旧できませんでした。ページを再読み込みしてください。');
         }
       };
     });
   }, []);
 
   const attemptReconnect = useCallback(async () => {
+    // Prevent concurrent reconnect loops
+    if (reconnectingRef.current) return;
+    reconnectingRef.current = true;
+
     reconnectAttemptsRef.current++;
     setIsReconnecting(true);
 
     const delay = Math.pow(2, reconnectAttemptsRef.current) * 1000;
     await new Promise((r) => setTimeout(r, delay));
 
-    // Check if user disconnected during backoff delay
     if (disconnectedManuallyRef.current) {
       setIsReconnecting(false);
+      reconnectingRef.current = false;
       return;
     }
 
@@ -124,11 +133,14 @@ export function useDeepgramLive(): UseDeepgramLiveReturn {
       const token = await getTokenWithBackoff();
       if (disconnectedManuallyRef.current) {
         setIsReconnecting(false);
+        reconnectingRef.current = false;
         return;
       }
+      reconnectingRef.current = false; // Allow onclose to work for the new WS
       const ws = await connectWs(token);
       wsRef.current = ws;
     } catch {
+      reconnectingRef.current = false;
       if (disconnectedManuallyRef.current) {
         setIsReconnecting(false);
         return;
@@ -146,6 +158,7 @@ export function useDeepgramLive(): UseDeepgramLiveReturn {
     keywordsRef.current = keywords ?? [];
     disconnectedManuallyRef.current = false;
     reconnectAttemptsRef.current = 0;
+    reconnectingRef.current = false;
 
     const token = await getTokenWithBackoff();
     const ws = await connectWs(token);
@@ -171,15 +184,17 @@ export function useDeepgramLive(): UseDeepgramLiveReturn {
         wsRef.current = newWs;
         disconnectedManuallyRef.current = false;
       } catch {
-        // Reset manual flag so auto-reconnect can work
+        // Reset manual flag and attempt reconnect for recovery
         disconnectedManuallyRef.current = false;
-        errorHandlerRef.current?.('トークンの更新に失敗しました');
+        reconnectAttemptsRef.current = 0;
+        attemptReconnect();
       }
     }, 9 * 60 * 1000);
-  }, [connectWs]);
+  }, [connectWs, attemptReconnect]);
 
   const disconnect = useCallback(() => {
     disconnectedManuallyRef.current = true;
+    reconnectingRef.current = false;
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'CloseStream' }));
       wsRef.current.close();
