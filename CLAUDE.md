@@ -21,17 +21,28 @@
 
 ## ドキュメント
 
-実装前に必ず以下を参照すること:
+**実装前に必ず以下を参照すること。** GitHub Issue のチケットだけでなく、関連するドキュメントを必ず読んでから実装に着手する。
 
 | ドキュメント | 内容 |
 |-------------|------|
-| `docs/requirements.md` | 要件定義書（ユーザーストーリー、コア機能、MVPスコープ） |
-| `docs/design.md` | 設計書（アーキテクチャ、データモデル、API設計） |
-| `docs/implementation-plan.md` | 実装計画書（スプリント計画、タスク一覧、コードパターン） |
-| `docs/screen-design.md` | 画面設計書（全画面のレイアウト・コンポーネント構成） |
-| `docs/api-research.md` | API調査レポート（Deepgram, Gemini, Claude等の仕様） |
+| `docs/01-requirements.md` | 要件定義書（ユーザーストーリー、コア機能、MVPスコープ） |
+| `docs/03-system-design.md` | 設計書（アーキテクチャ、データモデル、API設計） |
+| `docs/05-implementation-plan.md` | 実装計画書（スプリント計画、タスク一覧、コードパターン） |
+| `docs/04-screen-design.md` | 画面設計書（全画面のレイアウト・コンポーネント構成） |
+| `docs/02-api-research.md` | API調査レポート（Deepgram, Gemini, Claude等の仕様） |
 | `screen.pen` | デザインカンプ（Pencilファイル。全画面S1〜S8のビジュアルデザイン） |
 | `data/disney-templates.json` | ディズニーアトラクション26件のプリセットテンプレートデータ |
+
+### 実装時のドキュメント参照ルール
+
+各タスク実装時には、以下の手順でドキュメントを参照すること:
+
+1. **GitHub Issue** を確認し、タスク内容を把握する
+2. **`docs/05-implementation-plan.md`** で該当スプリント・タスクの詳細（成果物、実装パターン、完了条件）を確認する
+3. **`docs/03-system-design.md`** でデータモデル・API仕様を確認する（DB・API実装時）
+4. **`docs/04-screen-design.md`** + **`screen.pen`** でUI仕様・デザイントークンを確認する（UI実装時）
+5. **`docs/02-api-research.md`** で外部API仕様を確認する（Deepgram, Gemini, Claude連携時）
+6. **`docs/01-requirements.md`** でユーザーストーリー・機能要件を確認する（機能の意図が不明な場合）
 
 ## ブランチ戦略
 
