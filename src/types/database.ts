@@ -28,6 +28,7 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
       contexts: {
         Row: {
@@ -72,6 +73,7 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
       sessions: {
         Row: {
@@ -104,6 +106,7 @@ export type Database = {
           ended_at?: string | null;
           created_at?: string;
         };
+        Relationships: [];
       };
       transcripts: {
         Row: {
@@ -133,6 +136,7 @@ export type Database = {
           timestamp_ms?: number;
           created_at?: string;
         };
+        Relationships: [];
       };
       context_templates: {
         Row: {
@@ -174,8 +178,10 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
     };
+    Views: Record<string, never>;
     Functions: {
       get_monthly_usage: {
         Args: {
