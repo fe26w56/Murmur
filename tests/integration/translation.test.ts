@@ -120,22 +120,31 @@ describe('translateStream', () => {
     expect(chunks).toEqual(['Raw text fallback']);
   });
 
-  it('does not fallback if partial output was already yielded', async () => {
-    // Simulate a stream that yields one chunk then errors
-    const stream = new ReadableStream<Uint8Array>({
-      start(controller) {
-        const encoder = new TextEncoder();
-        controller.enqueue(
-          encoder.encode('data: {"candidates":[{"content":{"parts":[{"text":"部分"}]}}]}\n\n'),
-        );
-        // Simulate error by closing abruptly
-        controller.close();
-      },
-    });
+  it('does not fallback if partial output was already yielded then stream errors', async () => {
+    // Simulate a stream that yields one chunk then throws a read error
+    let readerCallCount = 0;
+    const encoder = new TextEncoder();
+    const mockBody = {
+      getReader: () => ({
+        read: async () => {
+          readerCallCount++;
+          if (readerCallCount === 1) {
+            return {
+              done: false,
+              value: encoder.encode(
+                'data: {"candidates":[{"content":{"parts":[{"text":"部分"}]}}]}\n\n',
+              ),
+            };
+          }
+          // Second read throws to simulate network error mid-stream
+          throw new Error('Network error mid-stream');
+        },
+      }),
+    };
 
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      body: stream,
+      body: mockBody,
     });
 
     const chunks: string[] = [];
@@ -146,7 +155,7 @@ describe('translateStream', () => {
       chunks.push(chunk);
     }
 
-    // Should get the partial output, no fallback
+    // Should get the partial output, no fallback attempt
     expect(chunks).toEqual(['部分']);
     expect(mockFetch).toHaveBeenCalledOnce();
   });

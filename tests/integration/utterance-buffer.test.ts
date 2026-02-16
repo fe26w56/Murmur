@@ -1,13 +1,18 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-// Test the token estimation and buffering logic directly
-// (Testing the hook logic without React)
+/**
+ * Tests the core utterance buffering algorithm used by useUtteranceBuffer.
+ * The hook's internal logic mirrors this: accumulate final transcripts,
+ * emit when token count >= 50 or after 2s silence.
+ * This tests the algorithm, not the React hook lifecycle.
+ */
 
+// Same estimateTokens function as in useUtteranceBuffer.ts
 function estimateTokens(text: string): number {
   return text.split(/\s+/).filter(Boolean).length;
 }
 
-describe('estimateTokens', () => {
+describe('estimateTokens (shared utility)', () => {
   it('counts space-separated words', () => {
     expect(estimateTokens('hello world')).toBe(2);
     expect(estimateTokens('one two three four five')).toBe(5);
@@ -23,7 +28,7 @@ describe('estimateTokens', () => {
   });
 });
 
-describe('UtteranceBuffer logic', () => {
+describe('Utterance buffering algorithm', () => {
   let handler: ReturnType<typeof vi.fn>;
   let buffer: string[];
   let timer: ReturnType<typeof setTimeout> | null;
@@ -57,6 +62,7 @@ describe('UtteranceBuffer logic', () => {
     timer = setTimeout(emitUtterance, 2000);
   }
 
+  // Mirrors useUtteranceBuffer.addText (isFinal=true only)
   function addText(text: string) {
     buffer.push(text);
     const combined = buffer.join(' ');
@@ -69,8 +75,7 @@ describe('UtteranceBuffer logic', () => {
     }
   }
 
-  it('emits when token count reaches 50', () => {
-    // Add 50 words
+  it('emits immediately when token count reaches 50', () => {
     const words = Array.from({ length: 50 }, (_, i) => `word${i}`).join(' ');
     addText(words);
 
