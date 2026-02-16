@@ -83,8 +83,13 @@ export function useDeepgramLive(): UseDeepgramLiveReturn {
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+          if (data.type === 'Metadata') {
+            console.debug('[Murmur] Deepgram metadata:', data.model_info?.name);
+            return;
+          }
           const transcript = data?.channel?.alternatives?.[0]?.transcript;
           if (transcript) {
+            console.debug('[Murmur] transcript:', transcript.slice(0, 50), 'final:', data.is_final);
             handlerRef.current?.({
               text: transcript,
               isFinal: data.is_final === true,
@@ -208,7 +213,11 @@ export function useDeepgramLive(): UseDeepgramLiveReturn {
 
   const sendAudio = useCallback((data: Blob) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(data);
+      data.arrayBuffer().then((buf) => {
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef.current.send(buf);
+        }
+      });
     }
   }, []);
 

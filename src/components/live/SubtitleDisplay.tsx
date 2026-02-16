@@ -25,7 +25,7 @@ export function SubtitleDisplay({ translations, interimText }: SubtitleDisplayPr
     <div className="flex flex-1 flex-col justify-end p-4">
       {/* Interim transcription (top area) */}
       {interimText && (
-        <p className="mb-4 text-sm text-muted-foreground/50 italic">{interimText}</p>
+        <p className="mb-4 text-sm text-muted-foreground italic">{interimText}</p>
       )}
 
       {/* Subtitle entries */}
