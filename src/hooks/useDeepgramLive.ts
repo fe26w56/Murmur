@@ -171,6 +171,8 @@ export function useDeepgramLive(): UseDeepgramLiveReturn {
         wsRef.current = newWs;
         disconnectedManuallyRef.current = false;
       } catch {
+        // Reset manual flag so auto-reconnect can work
+        disconnectedManuallyRef.current = false;
         errorHandlerRef.current?.('トークンの更新に失敗しました');
       }
     }, 9 * 60 * 1000);

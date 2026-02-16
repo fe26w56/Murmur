@@ -43,14 +43,25 @@ export async function* translateStream(
     });
     const systemPrompt = buildSystemPrompt();
 
+    let hasYielded = false;
+
     try {
-      if (config.provider === 'gemini') {
-        yield* streamGemini(config.model, systemPrompt, prompt);
-      } else {
-        yield* streamAnthropic(config.model, systemPrompt, prompt);
+      const stream =
+        config.provider === 'gemini'
+          ? streamGemini(config.model, systemPrompt, prompt)
+          : streamAnthropic(config.model, systemPrompt, prompt);
+
+      for await (const chunk of stream) {
+        hasYielded = true;
+        yield chunk;
       }
       return; // Success, exit
     } catch {
+      // Only fallback if no chunks were already sent to the client
+      if (hasYielded) {
+        return; // Partial output already sent, can't cleanly fallback
+      }
+
       const fallback = getFallbackTier(currentTier);
       if (fallback) {
         currentTier = fallback;
