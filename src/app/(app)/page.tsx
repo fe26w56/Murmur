@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { SessionCard } from '@/components/sessions/SessionCard';
 
 interface Session {
@@ -10,30 +10,44 @@ interface Session {
   translation_tier: 'lite' | 'standard' | 'premium';
   started_at: string;
   duration_seconds: number | null;
+  context_title: string | null;
+}
+
+const LIMIT = 10;
+
+function formatUsage(totalMinutes: number): string {
+  if (totalMinutes >= 60) {
+    const hours = Math.floor(totalMinutes / 60);
+    const mins = totalMinutes % 60;
+    return mins > 0 ? `${hours}時間${mins}分` : `${hours}時間`;
+  }
+  return `${totalMinutes}分`;
 }
 
 export default function HomePage() {
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [total, setTotal] = useState(0);
   const [monthlyMinutes, setMonthlyMinutes] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   useEffect(() => {
     async function load() {
       try {
-        // Fetch recent sessions
-        const res = await fetch('/api/sessions?limit=10');
-        if (res.ok) {
-          const json = await res.json();
-          setSessions(json.data ?? []);
+        const [sessionsRes, usageRes] = await Promise.all([
+          fetch(`/api/sessions?limit=${LIMIT}`),
+          fetch('/api/sessions/monthly-usage'),
+        ]);
 
-          // Calculate monthly usage from sessions this month
-          const now = new Date();
-          const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-          const thisMonthSessions = (json.data ?? []) as Session[];
-          const totalSeconds = thisMonthSessions
-            .filter((s) => new Date(s.started_at) >= monthStart && s.duration_seconds)
-            .reduce((sum: number, s: Session) => sum + (s.duration_seconds ?? 0), 0);
-          setMonthlyMinutes(Math.round(totalSeconds / 60));
+        if (sessionsRes.ok) {
+          const json = await sessionsRes.json();
+          setSessions(json.data ?? []);
+          setTotal(json.total ?? 0);
+        }
+
+        if (usageRes.ok) {
+          const usageJson = await usageRes.json();
+          setMonthlyMinutes(Math.round((usageJson.totalSeconds ?? 0) / 60));
         }
       } catch {
         // Silently handle fetch errors
@@ -44,8 +58,26 @@ export default function HomePage() {
     load();
   }, []);
 
+  const loadMore = useCallback(async () => {
+    setLoadingMore(true);
+    try {
+      const res = await fetch(`/api/sessions?limit=${LIMIT}&offset=${sessions.length}`);
+      if (res.ok) {
+        const json = await res.json();
+        setSessions((prev) => [...prev, ...(json.data ?? [])]);
+      }
+    } catch {
+      // Silently handle
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [sessions.length]);
+
   const maxMinutes = 60;
+  const remaining = Math.max(maxMinutes - monthlyMinutes, 0);
   const usagePercent = Math.min((monthlyMinutes / maxMinutes) * 100, 100);
+  const barColor =
+    remaining === 0 ? 'bg-destructive' : remaining <= 10 ? 'bg-yellow-500' : 'bg-primary';
 
   return (
     <div className="mx-auto max-w-lg space-y-6 p-4">
@@ -55,14 +87,20 @@ export default function HomePage() {
         <div className="mt-2 flex items-center gap-3">
           <div className="h-2 flex-1 rounded-full bg-muted">
             <div
-              className="h-2 rounded-full bg-primary transition-all"
+              className={`h-2 rounded-full transition-all ${barColor}`}
               style={{ width: `${usagePercent}%` }}
             />
           </div>
           <span className="text-sm font-medium">
-            {monthlyMinutes}分 / {maxMinutes}分
+            {formatUsage(monthlyMinutes)} / {formatUsage(maxMinutes)}
           </span>
         </div>
+        {remaining <= 10 && remaining > 0 && (
+          <p className="mt-1 text-xs text-yellow-600">残り{remaining}分です</p>
+        )}
+        {remaining === 0 && (
+          <p className="mt-1 text-xs text-destructive">月間利用上限に達しました</p>
+        )}
       </div>
 
       {/* New session button */}
@@ -130,8 +168,19 @@ export default function HomePage() {
                 translation_tier={s.translation_tier}
                 started_at={s.started_at}
                 duration_seconds={s.duration_seconds}
+                context_title={s.context_title}
               />
             ))}
+
+            {sessions.length < total && (
+              <button
+                onClick={loadMore}
+                disabled={loadingMore}
+                className="w-full rounded-xl border border-border py-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent disabled:opacity-50"
+              >
+                {loadingMore ? '読み込み中...' : 'もっと見る'}
+              </button>
+            )}
           </div>
         )}
       </div>

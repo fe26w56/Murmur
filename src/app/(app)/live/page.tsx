@@ -119,7 +119,7 @@ export default function LivePage() {
         setElapsedSeconds((prev: number) => prev + 1);
       }, 1000);
 
-      // Start heartbeat (every 30s) to keep session alive
+      // Start heartbeat (every 5min) to keep session alive
       heartbeatRef.current = setInterval(async () => {
         if (session.id) {
           await fetch(`/api/sessions/${session.id}`, {
@@ -128,7 +128,7 @@ export default function LivePage() {
             body: JSON.stringify({ endedAt: new Date().toISOString() }),
           }).catch(() => {});
         }
-      }, 30000);
+      }, 5 * 60 * 1000);
     } catch (err) {
       setError(err instanceof Error ? err.message : '開始に失敗しました');
     }

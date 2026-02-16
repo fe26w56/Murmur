@@ -6,6 +6,7 @@ interface SessionCardProps {
   translation_tier: 'lite' | 'standard' | 'premium';
   started_at: string;
   duration_seconds: number | null;
+  context_title: string | null;
 }
 
 export function SessionCard({
@@ -14,6 +15,7 @@ export function SessionCard({
   translation_tier,
   started_at,
   duration_seconds,
+  context_title,
 }: SessionCardProps) {
   const time = new Date(started_at).toLocaleTimeString('ja-JP', {
     hour: '2-digit',
@@ -32,6 +34,7 @@ export function SessionCard({
       <div>
         <p className="font-medium">{title}</p>
         <p className="mt-0.5 text-sm text-muted-foreground">
+          {context_title && <>{context_title} · </>}
           {translation_tier} · {duration}
         </p>
       </div>
