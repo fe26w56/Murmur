@@ -114,11 +114,25 @@ export function useDeepgramLive(): UseDeepgramLiveReturn {
     const delay = Math.pow(2, reconnectAttemptsRef.current) * 1000;
     await new Promise((r) => setTimeout(r, delay));
 
+    // Check if user disconnected during backoff delay
+    if (disconnectedManuallyRef.current) {
+      setIsReconnecting(false);
+      return;
+    }
+
     try {
       const token = await getTokenWithBackoff();
+      if (disconnectedManuallyRef.current) {
+        setIsReconnecting(false);
+        return;
+      }
       const ws = await connectWs(token);
       wsRef.current = ws;
     } catch {
+      if (disconnectedManuallyRef.current) {
+        setIsReconnecting(false);
+        return;
+      }
       if (reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
         attemptReconnect();
       } else {
@@ -148,12 +162,14 @@ export function useDeepgramLive(): UseDeepgramLiveReturn {
     tokenTimerRef.current = setTimeout(async () => {
       try {
         const newToken = await getTokenWithBackoff();
-        ws.send(JSON.stringify({ type: 'CloseStream' }));
+        // Mark as manual close so onclose doesn't trigger reconnect
         disconnectedManuallyRef.current = true;
+        ws.send(JSON.stringify({ type: 'CloseStream' }));
         ws.close();
-        disconnectedManuallyRef.current = false;
+        // Connect new WS, then reset manual flag
         const newWs = await connectWs(newToken);
         wsRef.current = newWs;
+        disconnectedManuallyRef.current = false;
       } catch {
         errorHandlerRef.current?.('トークンの更新に失敗しました');
       }

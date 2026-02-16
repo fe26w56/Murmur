@@ -139,11 +139,15 @@ export default function LivePage() {
         }
       }, 5 * 60 * 1000);
     } catch (err) {
-      // Handle mic permission errors specifically
-      if (audio.error === 'permission_denied') {
-        setError('マイクの使用が許可されていません。ブラウザの設定でマイクのアクセスを許可してください。');
-      } else if (audio.error === 'not_supported') {
-        setError('お使いのデバイスではマイクが利用できません。');
+      // Handle mic permission errors from the thrown DOMException
+      if (err instanceof DOMException) {
+        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+          setError('マイクの使用が許可されていません。ブラウザの設定でマイクのアクセスを許可してください。');
+        } else if (err.name === 'NotFoundError' || err.name === 'NotSupportedError') {
+          setError('お使いのデバイスではマイクが利用できません。');
+        } else {
+          setError(err instanceof Error ? err.message : '開始に失敗しました');
+        }
       } else {
         setError(err instanceof Error ? err.message : '開始に失敗しました');
       }
