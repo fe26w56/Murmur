@@ -21,6 +21,7 @@ export function useAudioCapture(): UseAudioCaptureReturn {
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animFrameRef = useRef<number>(0);
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -55,13 +56,35 @@ export function useAudioCapture(): UseAudioCaptureReturn {
 
     streamRef.current = stream;
 
-    // Audio analysis for volume meter
+    // Audio processing pipeline:
+    // source → highpass(300Hz) → lowpass(3000Hz) → destination (for MediaRecorder)
+    // source → analyser (for volume meter, uses raw audio)
     const audioCtx = new AudioContext();
+    audioCtxRef.current = audioCtx;
     const source = audioCtx.createMediaStreamSource(stream);
+
+    // Volume meter on raw audio
     const analyser = audioCtx.createAnalyser();
     analyser.fftSize = 256;
     source.connect(analyser);
     analyserRef.current = analyser;
+
+    // Bandpass filter chain for speech frequencies (300Hz - 3000Hz)
+    const highpass = audioCtx.createBiquadFilter();
+    highpass.type = 'highpass';
+    highpass.frequency.value = 300;
+    highpass.Q.value = 0.7;
+
+    const lowpass = audioCtx.createBiquadFilter();
+    lowpass.type = 'lowpass';
+    lowpass.frequency.value = 3000;
+    lowpass.Q.value = 0.7;
+
+    // Route filtered audio to a new MediaStream for recording
+    const destination = audioCtx.createMediaStreamDestination();
+    source.connect(highpass);
+    highpass.connect(lowpass);
+    lowpass.connect(destination);
 
     // Volume monitoring
     const dataArray = new Uint8Array(analyser.frequencyBinCount);
@@ -87,12 +110,12 @@ export function useAudioCapture(): UseAudioCaptureReturn {
     };
     updateVolume();
 
-    // MediaRecorder
+    // MediaRecorder uses filtered audio stream
     const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
       ? 'audio/webm;codecs=opus'
       : 'audio/mp4';
 
-    const recorder = new MediaRecorder(stream, { mimeType });
+    const recorder = new MediaRecorder(destination.stream, { mimeType });
     recorder.ondataavailable = (e) => {
       if (e.data.size > 0) onData(e.data);
     };
@@ -118,8 +141,10 @@ export function useAudioCapture(): UseAudioCaptureReturn {
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
     wakeLockRef.current?.release();
 
+    audioCtxRef.current?.close();
     mediaRecorderRef.current = null;
     streamRef.current = null;
+    audioCtxRef.current = null;
     analyserRef.current = null;
     wakeLockRef.current = null;
 
