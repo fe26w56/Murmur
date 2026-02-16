@@ -68,10 +68,14 @@ export function Header() {
               <DropdownMenuSeparator />
             </>
           )}
-          <DropdownMenuItem onClick={handleLogout}>ログアウト</DropdownMenuItem>
+          <DropdownMenuItem asChild>
+            <Link href="/settings">設定</Link>
+          </DropdownMenuItem>
           <DropdownMenuItem asChild>
             <Link href="/legal">プライバシーポリシー</Link>
           </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={handleLogout}>ログアウト</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </header>

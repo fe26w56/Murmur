@@ -38,6 +38,7 @@ export default function LivePage() {
   const buffer = useUtteranceBuffer();
   const translation = useTranslation();
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Set initial tier from settings
   useEffect(() => {
@@ -117,6 +118,17 @@ export default function LivePage() {
       timerRef.current = setInterval(() => {
         setElapsedSeconds((prev: number) => prev + 1);
       }, 1000);
+
+      // Start heartbeat (every 5min) to keep session alive
+      heartbeatRef.current = setInterval(async () => {
+        if (session.id) {
+          await fetch(`/api/sessions/${session.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ endedAt: new Date().toISOString() }),
+          }).catch(() => {});
+        }
+      }, 5 * 60 * 1000);
     } catch (err) {
       setError(err instanceof Error ? err.message : '開始に失敗しました');
     }
@@ -129,6 +141,7 @@ export default function LivePage() {
     buffer.flush();
 
     if (timerRef.current) clearInterval(timerRef.current);
+    if (heartbeatRef.current) clearInterval(heartbeatRef.current);
 
     // End session
     if (sessionId) {

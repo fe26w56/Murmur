@@ -17,7 +17,7 @@ export async function GET(request: Request) {
 
     const { data, error, count } = await supabase
       .from('sessions')
-      .select('*', { count: 'exact' })
+      .select('*, contexts:context_id(title)', { count: 'exact' })
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
@@ -25,7 +25,14 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ data, total: count ?? 0 });
+    // Flatten context title into session object
+    const sessions = (data ?? []).map((s) => {
+      const { contexts, ...rest } = s as Record<string, unknown>;
+      const ctx = contexts as { title: string } | null;
+      return { ...rest, context_title: ctx?.title ?? null };
+    });
+
+    return NextResponse.json({ data: sessions, total: count ?? 0 });
   } catch (e) {
     if (e instanceof Response) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
