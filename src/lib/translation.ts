@@ -15,8 +15,8 @@ interface TranslateParams {
 }
 
 const tierConfig: Record<TranslationTier, { provider: 'gemini' | 'anthropic'; model: string }> = {
-  lite: { provider: 'gemini', model: 'gemini-2.5-flash-lite-preview-06-17' },
-  standard: { provider: 'gemini', model: 'gemini-2.5-flash-preview-05-20' },
+  lite: { provider: 'gemini', model: 'gemini-2.5-flash-lite' },
+  standard: { provider: 'gemini', model: 'gemini-2.5-flash' },
   premium: { provider: 'anthropic', model: 'claude-sonnet-4-5-20250929' },
 };
 
@@ -46,6 +46,7 @@ export async function* translateStream(
     let hasYielded = false;
 
     try {
+      console.log(`[Murmur] Translating with ${config.provider}/${config.model} tier=${currentTier}`);
       const stream =
         config.provider === 'gemini'
           ? streamGemini(config.model, systemPrompt, prompt)
@@ -56,7 +57,8 @@ export async function* translateStream(
         yield chunk;
       }
       return; // Success, exit
-    } catch {
+    } catch (err) {
+      console.error(`[Murmur] Translation error (${config.provider}/${config.model}):`, err);
       // Only fallback if no chunks were already sent to the client
       if (hasYielded) {
         return; // Partial output already sent, can't cleanly fallback
@@ -64,6 +66,7 @@ export async function* translateStream(
 
       const fallback = getFallbackTier(currentTier);
       if (fallback) {
+        console.log(`[Murmur] Falling back from ${currentTier} to ${fallback}`);
         currentTier = fallback;
         continue; // Retry with fallback tier
       }
