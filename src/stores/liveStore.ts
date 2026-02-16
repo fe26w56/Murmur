@@ -12,10 +12,10 @@ type LiveState = {
 
 type LiveActions = {
   setRecording: (isRecording: boolean) => void;
-  setTier: (tier: TranslationTier) => void;
+  setCurrentTier: (tier: TranslationTier) => void;
   setSessionId: (id: string | null) => void;
   setContextId: (id: string | null) => void;
-  setElapsedSeconds: (seconds: number) => void;
+  setElapsedSeconds: (seconds: number | ((prev: number) => number)) => void;
   reset: () => void;
 };
 
@@ -30,9 +30,12 @@ const initialState: LiveState = {
 export const useLiveStore = create<LiveState & LiveActions>()((set) => ({
   ...initialState,
   setRecording: (isRecording) => set({ isRecording }),
-  setTier: (tier) => set({ currentTier: tier }),
+  setCurrentTier: (tier) => set({ currentTier: tier }),
   setSessionId: (id) => set({ sessionId: id }),
   setContextId: (id) => set({ contextId: id }),
-  setElapsedSeconds: (seconds) => set({ elapsedSeconds: seconds }),
+  setElapsedSeconds: (seconds) =>
+    set((state) => ({
+      elapsedSeconds: typeof seconds === 'function' ? seconds(state.elapsedSeconds) : seconds,
+    })),
   reset: () => set(initialState),
 }));
