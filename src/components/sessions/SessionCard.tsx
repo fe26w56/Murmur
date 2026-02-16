@@ -22,7 +22,7 @@ export function SessionCard({
     minute: '2-digit',
   });
 
-  const duration = duration_seconds
+  const duration = duration_seconds !== null
     ? `${Math.round(duration_seconds / 60)}分`
     : '進行中';
 

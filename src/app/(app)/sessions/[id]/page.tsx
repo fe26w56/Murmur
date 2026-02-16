@@ -53,9 +53,16 @@ export default function SessionDetailPage() {
     load();
   }, [id]);
 
+  const [deleteError, setDeleteError] = useState(false);
+
   const handleDelete = useCallback(async () => {
-    await fetch(`/api/sessions/${id}`, { method: 'DELETE' });
-    router.push('/');
+    setDeleteError(false);
+    const res = await fetch(`/api/sessions/${id}`, { method: 'DELETE' });
+    if (res.ok) {
+      router.push('/');
+    } else {
+      setDeleteError(true);
+    }
   }, [id, router]);
 
   if (loading) {
@@ -159,6 +166,9 @@ export default function SessionDetailPage() {
             <p className="mt-2 text-sm text-muted-foreground">
               この操作は取り消せません。トランスクリプトも削除されます。
             </p>
+            {deleteError && (
+              <p className="mt-2 text-sm text-destructive">削除に失敗しました。もう一度お試しください。</p>
+            )}
             <div className="mt-6 flex gap-3">
               <button
                 onClick={() => setShowDeleteConfirm(false)}
