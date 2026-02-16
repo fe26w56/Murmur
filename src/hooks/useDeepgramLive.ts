@@ -65,12 +65,12 @@ export function useDeepgramLive(): UseDeepgramLiveReturn {
     let url = 'wss://api.deepgram.com/v1/listen?model=nova-3&language=en&punctuate=true&interim_results=true&utterance_end_ms=2000';
 
     if (keywords.length > 0) {
-      const keywordParam = keywords.map((k) => `${encodeURIComponent(k)}:2`).join('&keywords=');
-      url += `&keywords=${keywordParam}`;
+      const keywordParam = keywords.map((k) => `${encodeURIComponent(k)}:2`).join('&keyterm=');
+      url += `&keyterm=${keywordParam}`;
     }
 
     return new Promise<WebSocket>((resolve, reject) => {
-      const ws = new WebSocket(url, ['token', token]);
+      const ws = new WebSocket(url, ['bearer', token]);
 
       ws.onopen = () => {
         setIsConnected(true);

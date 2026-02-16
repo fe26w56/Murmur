@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 
+const TTL_SECONDS = 600;
+
 export async function POST() {
   try {
     await getAuthUser();
@@ -17,7 +19,7 @@ export async function POST() {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        time_to_live_in_seconds: 600,
+        ttl_seconds: TTL_SECONDS,
       }),
     });
 
@@ -40,8 +42,8 @@ export async function POST() {
     const data = await res.json();
 
     return NextResponse.json({
-      token: data.access_token ?? data.token,
-      expiresIn: 600,
+      token: data.access_token,
+      expiresIn: data.expires_in ?? TTL_SECONDS,
     });
   } catch (e) {
     if (e instanceof Response) {
