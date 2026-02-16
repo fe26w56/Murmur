@@ -70,9 +70,11 @@ export function useDeepgramLive(): UseDeepgramLiveReturn {
     }
 
     return new Promise<WebSocket>((resolve, reject) => {
+      console.log('[Murmur] Connecting to Deepgram...', url.slice(0, 80));
       const ws = new WebSocket(url, ['bearer', token]);
 
       ws.onopen = () => {
+        console.log('[Murmur] WebSocket OPEN');
         setIsConnected(true);
         setIsReconnecting(false);
         reconnectAttemptsRef.current = 0;
@@ -80,16 +82,20 @@ export function useDeepgramLive(): UseDeepgramLiveReturn {
         resolve(ws);
       };
 
+      let msgCount = 0;
       ws.onmessage = (event) => {
+        msgCount++;
         try {
           const data = JSON.parse(event.data);
           if (data.type === 'Metadata') {
-            console.debug('[Murmur] Deepgram metadata:', data.model_info?.name);
+            console.log('[Murmur] Deepgram ready, model:', data.model_info?.name);
             return;
           }
           const transcript = data?.channel?.alternatives?.[0]?.transcript;
+          if (msgCount <= 3 || transcript) {
+            console.log('[Murmur] msg#' + msgCount, transcript ? `"${transcript.slice(0, 40)}"` : '(empty)', 'final:', data.is_final);
+          }
           if (transcript) {
-            console.debug('[Murmur] transcript:', transcript.slice(0, 50), 'final:', data.is_final);
             handlerRef.current?.({
               text: transcript,
               isFinal: data.is_final === true,
@@ -100,9 +106,13 @@ export function useDeepgramLive(): UseDeepgramLiveReturn {
         }
       };
 
-      ws.onerror = () => reject(new Error('WebSocket connection failed'));
+      ws.onerror = (e) => {
+        console.log('[Murmur] WebSocket ERROR', e);
+        reject(new Error('WebSocket connection failed'));
+      };
 
-      ws.onclose = () => {
+      ws.onclose = (e) => {
+        console.log('[Murmur] WebSocket CLOSED code=' + e.code, 'reason=' + e.reason, 'msgs=' + msgCount);
         setIsConnected(false);
         // Only trigger reconnect from onclose if not already reconnecting
         // and not manually disconnected
@@ -211,8 +221,13 @@ export function useDeepgramLive(): UseDeepgramLiveReturn {
     setIsReconnecting(false);
   }, []);
 
+  const audioChunkCountRef = useRef(0);
   const sendAudio = useCallback((data: Blob) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
+      audioChunkCountRef.current++;
+      if (audioChunkCountRef.current <= 3) {
+        console.log('[Murmur] sendAudio chunk#' + audioChunkCountRef.current, 'size=' + data.size, 'type=' + data.type);
+      }
       data.arrayBuffer().then((buf) => {
         if (wsRef.current?.readyState === WebSocket.OPEN) {
           wsRef.current.send(buf);
